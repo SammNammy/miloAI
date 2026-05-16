@@ -124,7 +124,7 @@
       <label class="field"><span>🤖 AI Model</span>
         <select id="modelSelect">
           <option value="deepseek/deepseek-v4-flash:free">⚡ Milo Fast — Quick replies, 1M context (DeepSeek V4)</option>
-          <option value="deepseek/deepseek-r1-0528:free">🧠 Milo Deep Think — Best reasoning & math (DeepSeek R1)</option>
+          <option value="deepseek/deepseek-r1:free">🧠 Milo Deep Think — Best reasoning & math (DeepSeek R1)</option>
           <option value="nvidia/nemotron-3-super-120b-a12b:free">🔧 Milo Agent — Agentic tasks & coding (Nemotron 3)</option>
           <option value="openai/gpt-oss-120b:free">💪 Milo 120B — Powerful all-rounder (GPT-OSS 120B)</option>
           <option value="google/gemini-2.0-flash-lite-001">👁️ Milo Vision — Image & text (Gemini Flash)</option>
@@ -190,7 +190,7 @@
 
       const MILO_MODELS = {
         'deepseek/deepseek-v4-flash:free':              { name: 'Milo Fast',       emoji: '⚡', desc: 'Quick replies, 1M context' },
-        'deepseek/deepseek-r1-0528:free':               { name: 'Milo Deep Think', emoji: '🧠', desc: 'Best reasoning & math' },
+        'deepseek/deepseek-r1:free':                    { name: 'Milo Deep Think', emoji: '🧠', desc: 'Best reasoning & math' },
         'nvidia/nemotron-3-super-120b-a12b:free':       { name: 'Milo Agent',      emoji: '🔧', desc: 'Agentic tasks & coding' },
         'openai/gpt-oss-120b:free':                     { name: 'Milo 120B',       emoji: '💪', desc: 'Powerful all-rounder' },
         'google/gemini-2.0-flash-lite-001':             { name: 'Milo Vision',     emoji: '👁️', desc: 'Image & text' }
@@ -219,7 +219,7 @@
       function createChat(title = 'New chat') { return { id: crypto.randomUUID(), title, createdAt: Date.now(), updatedAt: Date.now(), messages: [] }; }
       function activeChat() { return chats.find(c => c.id === activeChatId) || chats[0]; }
 
-      function renderChatList() { /* unchanged */ chatListEl.innerHTML = ''; chats.slice().sort((a,b)=>b.updatedAt-a.updatedAt).forEach(chat=>{ const btn=document.createElement('button'); btn.className=`chat-item ${chat.id===activeChatId?'active':''}`; btn.textContent=chat.title; btn.dataset.chatId=chat.id; btn.addEventListener('click',()=>{activeChatId=chat.id;saveChats();renderApp();}); btn.addEventListener('contextmenu',e=>{e.preventDefault();contextChatId=chat.id;contextMenu.style.display='block';contextMenu.style.left=e.clientX+'px';contextMenu.style.top=e.clientY+'px';}); chatListEl.appendChild(btn); }); }
+      function renderChatList() { chatListEl.innerHTML = ''; chats.slice().sort((a,b)=>b.updatedAt-a.updatedAt).forEach(chat=>{ const btn=document.createElement('button'); btn.className=`chat-item ${chat.id===activeChatId?'active':''}`; btn.textContent=chat.title; btn.dataset.chatId=chat.id; btn.addEventListener('click',()=>{activeChatId=chat.id;saveChats();renderApp();}); btn.addEventListener('contextmenu',e=>{e.preventDefault();contextChatId=chat.id;contextMenu.style.display='block';contextMenu.style.left=e.clientX+'px';contextMenu.style.top=e.clientY+'px';}); chatListEl.appendChild(btn); }); }
       document.addEventListener('click', ()=> { contextMenu.style.display = 'none'; });
       contextMenu.addEventListener('click', e=> e.stopPropagation());
       contextDeleteBtn.addEventListener('click', ()=>{
@@ -229,7 +229,7 @@
         contextMenu.style.display='none';
       });
 
-      function renderAttachmentChips() { /* unchanged */ attachmentChips.innerHTML=''; attachedFiles.forEach((f,i)=>{ const chip=document.createElement('span'); chip.className='attachment-chip'; if(f.type.startsWith('image/')){ const img=document.createElement('img'); img.src=f.dataUrl; chip.appendChild(img); } const ns=document.createElement('span'); ns.textContent=f.name; ns.style.whiteSpace='nowrap'; ns.style.overflow='hidden'; ns.style.textOverflow='ellipsis'; ns.style.maxWidth='120px'; chip.appendChild(ns); const rb=document.createElement('button'); rb.textContent='✕'; rb.addEventListener('click',()=>{attachedFiles.splice(i,1);renderAttachmentChips();updateModelBadge();updateModelNote();}); chip.appendChild(rb); attachmentChips.appendChild(chip); }); updateModelNote(); updateModelBadge(); }
+      function renderAttachmentChips() { attachmentChips.innerHTML=''; attachedFiles.forEach((f,i)=>{ const chip=document.createElement('span'); chip.className='attachment-chip'; if(f.type.startsWith('image/')){ const img=document.createElement('img'); img.src=f.dataUrl; chip.appendChild(img); } const ns=document.createElement('span'); ns.textContent=f.name; ns.style.whiteSpace='nowrap'; ns.style.overflow='hidden'; ns.style.textOverflow='ellipsis'; ns.style.maxWidth='120px'; chip.appendChild(ns); const rb=document.createElement('button'); rb.textContent='✕'; rb.addEventListener('click',()=>{attachedFiles.splice(i,1);renderAttachmentChips();updateModelBadge();updateModelNote();}); chip.appendChild(rb); attachmentChips.appendChild(chip); }); updateModelNote(); updateModelBadge(); }
       fileInput.addEventListener('change', async ()=>{
         const files = Array.from(fileInput.files);
         for(const file of files){
@@ -244,7 +244,7 @@
       clearAttachmentsBtn.addEventListener('click', ()=>{ attachedFiles=[]; renderAttachmentChips(); });
       function readFileAsDataURL(file){ return new Promise((resolve,reject)=>{ const reader=new FileReader(); reader.onload=()=>resolve(reader.result); reader.onerror=reject; reader.readAsDataURL(file); }); }
 
-      function renderMathInElement(el) { /* unchanged */ let html=el.innerHTML; html=html.replace(/\\\[([\s\S]*?)\\\]/g,(_,f)=>{try{return katex.renderToString(f.trim(),{displayMode:true,throwOnError:false})}catch{return f}}); html=html.replace(/\\\(([\s\S]*?)\\\)/g,(_,f)=>{try{return katex.renderToString(f.trim(),{displayMode:false,throwOnError:false})}catch{return f}}); el.innerHTML=html; }
+      function renderMathInElement(el) { let html=el.innerHTML; html=html.replace(/\\\[([\s\S]*?)\\\]/g,(_,f)=>{try{return katex.renderToString(f.trim(),{displayMode:true,throwOnError:false})}catch{return f}}); html=html.replace(/\\\(([\s\S]*?)\\\)/g,(_,f)=>{try{return katex.renderToString(f.trim(),{displayMode:false,throwOnError:false})}catch{return f}}); el.innerHTML=html; }
       function renderMarkdown(text){ const safe=text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); let html=safe.replace(/```(\w*)\n([\s\S]*?)```/g,(_,lang,code)=>`<pre><code>${code.trim()}</code></pre>`); html=html.replace(/`([^`]+)`/g,'<code>$1</code>'); html=html.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>'); html=html.split('\n\n').map(p=>p.trim()?`<p>${p.replace(/\n/g,'<br>')}</p>`:'').join(''); return html; }
 
       function createMessageElement(role){ const msg=document.createElement('div'); msg.className=`message ${role}`; const body=document.createElement('div'); msg.appendChild(body); const actions=document.createElement('div'); actions.className='message-actions'; const copyBtn=document.createElement('button'); copyBtn.textContent='Copy'; copyBtn.addEventListener('click',()=>{navigator.clipboard.writeText(body.textContent);copyBtn.textContent='Copied!';setTimeout(()=>copyBtn.textContent='Copy',1200);}); actions.appendChild(copyBtn); msg.appendChild(actions); return {msg,body}; }
@@ -329,7 +329,7 @@
         }
       }
 
-      function regenerate(){ /* unchanged */ const chat=activeChat(); const lastIdx=chat.messages.map(m=>m.role).lastIndexOf('assistant'); if(lastIdx>=0) chat.messages.splice(lastIdx,1); const lastUser=[...chat.messages].reverse().find(m=>m.role==='user'); if(!lastUser) return; saveChats(); sendMessage(lastUser.content,{replace:true}); }
+      function regenerate(){ const chat=activeChat(); const lastIdx=chat.messages.map(m=>m.role).lastIndexOf('assistant'); if(lastIdx>=0) chat.messages.splice(lastIdx,1); const lastUser=[...chat.messages].reverse().find(m=>m.role==='user'); if(!lastUser) return; saveChats(); sendMessage(lastUser.content,{replace:true}); }
       function toggleSidebar(show){ sidebar.classList.toggle('collapsed',!show); localStorage.setItem(STORAGE.sidebar,show?'1':'0'); }
       function renderApp(){ const chat=activeChat(); chatTitle.textContent=chat.title; renderChatList(); renderMessages(); updateModelBadge(); }
 
