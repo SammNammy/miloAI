@@ -28,6 +28,18 @@ async function readRequestJson(req) {
   return body ? JSON.parse(body) : {};
 }
 
+// Safely extract a human-readable error from an OpenRouter response
+function extractErrorMessage(data) {
+  if (typeof data === 'string') return data.slice(0, 200); // truncate long raw strings
+  if (data.error) {
+    if (typeof data.error === 'string') return data.error;
+    if (data.error.message) return data.error.message;
+    return JSON.stringify(data.error);
+  }
+  if (data.message) return data.message;
+  return 'Provider returned an unknown error.';
+}
+
 async function handleChat(req, res) {
   console.log("📥 Chat request received");
   let payload;
@@ -70,12 +82,14 @@ async function handleChat(req, res) {
     return;
   }
 
+  // Handle streaming
   if (payload.stream) {
     res.writeHead(response.status, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       "Connection": "keep-alive"
     });
+
     const reader = response.body.getReader();
     try {
       while (true) {
@@ -91,13 +105,34 @@ async function handleChat(req, res) {
     return;
   }
 
+  // Non-streaming: parse response safely
   try {
+    const contentType = response.headers.get("content-type") || "";
+    if (!response.ok) {
+      // Attempt to parse error body as JSON
+      let errorData;
+      if (contentType.includes("application/json")) {
+        errorData = await response.json();
+      } else {
+        const text = await response.text();
+        errorData = text;
+      }
+      const message = extractErrorMessage(errorData);
+      console.error("❌ Provider error:", message);
+      sendJson(res, response.status, { error: message });
+      return;
+    }
+
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error?.message || "OpenRouter error");
-    sendJson(res, 200, { content: data.choices?.[0]?.message?.content || "" });
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) {
+      sendJson(res, 500, { error: "Model returned an empty response." });
+      return;
+    }
+    sendJson(res, 200, { content });
   } catch (err) {
     console.error("❌ OpenRouter error:", err.message);
-    sendJson(res, 503, { error: err.message });
+    sendJson(res, 503, { error: "Unexpected error while processing response." });
   }
 }
 
