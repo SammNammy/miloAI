@@ -28,8 +28,8 @@ async function readRequestJson(req) {
   return body ? JSON.parse(body) : {};
 }
 
-// Proxy endpoint for OpenRouter
 async function handleChat(req, res) {
+  console.log("📥 Chat request received");
   let payload;
   try {
     payload = await readRequestJson(req);
@@ -43,8 +43,10 @@ async function handleChat(req, res) {
     return;
   }
 
+  // Attempt the OpenRouter API call – but DO NOT send response headers yet
+  let response;
   try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -60,36 +62,48 @@ async function handleChat(req, res) {
         stream: payload.stream ?? false
       })
     });
+  } catch (err) {
+    console.error("❌ OpenRouter fetch error:", err.message);
+    sendJson(res, 503, { error: "Could not connect to OpenRouter." });
+    return;
+  }
 
-    // For streaming, pipe the response directly
-    if (payload.stream) {
-      res.writeHead(response.status, {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive"
-      });
-      const reader = response.body.getReader();
-      const writer = new WritableStream({
-        write(chunk) {
-          res.write(chunk);
-        },
-        close() {
-          res.end();
-        }
-      });
-      await reader.pipeTo(writer);
-      return;
+  // Handle streaming response
+  if (payload.stream) {
+    // Stream the response – once headers are sent, we must NOT use sendJson
+    res.writeHead(response.status, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive"
+    });
+
+    const reader = response.body.getReader();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        res.write(value);
+      }
+      res.end();
+    } catch (err) {
+      console.error("❌ Streaming error:", err.message);
+      // Response already started – just end it, the client will see an incomplete stream
+      res.end();
     }
+    return;
+  }
 
+  // Handle normal (non‑streaming) response
+  try {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error?.message || "OpenRouter error");
     sendJson(res, 200, { content: data.choices?.[0]?.message?.content || "" });
   } catch (err) {
+    console.error("❌ OpenRouter error:", err.message);
     sendJson(res, 503, { error: err.message });
   }
 }
 
-// Serve static files
 async function serveStatic(req, res) {
   const url = new URL(req.url, `http://localhost:${port}`);
   const requested = url.pathname === "/" ? "/index.html" : url.pathname;
@@ -115,6 +129,8 @@ async function serveStatic(req, res) {
 }
 
 const server = http.createServer(async (req, res) => {
+  console.log(`${req.method} ${req.url}`);
+
   if (req.method === "POST" && req.url === "/api/chat") {
     await handleChat(req, res);
     return;
@@ -129,4 +145,5 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(port, () => {
   console.log(`Milo running on port ${port}`);
+  console.log(`API key configured: ${openrouterApiKey ? "YES" : "NO"}`);
 });
