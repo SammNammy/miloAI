@@ -166,7 +166,7 @@
     .send-btn:disabled { background: var(--panel); color: var(--muted); border: 1px solid var(--line); }
 
     .settings-dialog {
-      width: min(90vw, 460px); border: 1px solid var(--line-strong);
+      width: min(90vw, 480px); border: 1px solid var(--line-strong);
       border-radius: 16px; background: var(--surface); color: var(--ink);
       padding: 24px; max-height: 80vh; overflow-y: auto;
     }
@@ -181,6 +181,11 @@
     .tool-btn {
       padding: 8px 14px; background: var(--panel); border-radius: 8px; font-size: 0.85rem;
     }
+    .model-badge {
+      font-size: 0.75rem; color: var(--muted); padding: 4px 10px;
+      background: var(--panel); border-radius: 20px; margin-right: 8px;
+    }
+    .settings-note { font-size: 0.72rem; color: var(--muted); margin-top: 2px; line-height: 1.4; }
 
     @media (max-width: 700px) {
       .sidebar {
@@ -217,6 +222,7 @@
           <span class="topbar-title" id="chatTitle">New chat</span>
         </div>
         <div class="topbar-actions">
+          <span class="model-badge" id="modelBadge">Milo Fast</span>
           <button class="topbar-btn" id="regenerateBtn" title="Regenerate">↻</button>
           <button class="topbar-btn" id="exportChatBtn" title="Export">↓</button>
           <button class="topbar-btn" id="settingsBtn" title="Settings">⚙️</button>
@@ -244,9 +250,22 @@
     </main>
   </div>
 
+  <!-- Settings dialog with model selector -->
   <dialog id="settingsDialog" class="settings-dialog">
     <h3 style="margin-bottom:12px;">Settings</h3>
     <div class="settings-grid">
+      <!-- Model Selector -->
+      <label class="field"><span>🤖 AI Model</span>
+        <select id="modelSelect">
+          <option value="deepseek/deepseek-v4-flash:free">⚡ Milo Fast — Quick replies, 1M context (DeepSeek V4)</option>
+          <option value="deepseek/deepseek-r1-0528:free">🧠 Milo Deep Think — Best reasoning & math (DeepSeek R1)</option>
+          <option value="nvidia/nemotron-3-super-120b-a12b:free">🔧 Milo Agent — Agentic tasks & coding (Nemotron 3)</option>
+          <option value="openai/gpt-oss-120b:free">💪 Milo 120B — Powerful all-rounder (GPT-OSS 120B)</option>
+          <option value="google/gemini-2.0-flash-lite-001">👁️ Milo Vision — Image & text (Gemini Flash)</option>
+        </select>
+        <span class="settings-note">All models are completely free. Milo Vision is auto‑selected when you attach images.</span>
+      </label>
+
       <label class="field"><span>System Prompt</span>
         <textarea id="systemPrompt" rows="3" placeholder="You are Milo, a helpful AI assistant."></textarea>
       </label>
@@ -266,7 +285,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <script>
-    // API key is now handled by the server — not stored here
     (function() {
       const $ = s => document.querySelector(s);
       const sidebar = $('#sidebar');
@@ -279,6 +297,8 @@
       const newChatBtn = $('#newChatBtn');
       const settingsDialog = $('#settingsDialog');
       const settingsBtn = $('#settingsBtn');
+      const modelSelect = $('#modelSelect');
+      const modelBadge = $('#modelBadge');
       const systemPromptEl = $('#systemPrompt');
       const memoryNotesEl = $('#memoryNotes');
       const backupBtn = $('#backupBtn');
@@ -304,30 +324,50 @@
         active: 'milo-active',
         memory: 'milo-memory',
         sysPrompt: 'milo-sys-prompt',
-        sidebar: 'milo-sidebar-visible'
+        sidebar: 'milo-sidebar-visible',
+        model: 'milo-model'
       };
+
+      // Milo model definitions
+      const MILO_MODELS = {
+        'deepseek/deepseek-v4-flash:free':              { name: 'Milo Fast',       emoji: '⚡', desc: 'Quick replies, 1M context' },
+        'deepseek/deepseek-r1-0528:free':               { name: 'Milo Deep Think', emoji: '🧠', desc: 'Best reasoning & math' },
+        'nvidia/nemotron-3-super-120b-a12b:free':       { name: 'Milo Agent',      emoji: '🔧', desc: 'Agentic tasks & coding' },
+        'openai/gpt-oss-120b:free':                     { name: 'Milo 120B',       emoji: '💪', desc: 'Powerful all-rounder' },
+        'google/gemini-2.0-flash-lite-001':             { name: 'Milo Vision',     emoji: '👁️', desc: 'Image & text' }
+      };
+
+      const IMAGE_MODEL = 'google/gemini-2.0-flash-lite-001'; // auto-switch when images attached
 
       let chats = [];
       let activeChatId = null;
       let activeRequest = null;
       let attachedFiles = [];
 
-      const TEXT_MODEL = 'openai/gpt-oss-120b:free';
-      const IMAGE_MODEL = 'google/gemini-2.0-flash-lite-001';
+      function getSelectedModel() {
+        return localStorage.getItem(STORAGE.model) || 'deepseek/deepseek-v4-flash:free';
+      }
 
       function getCurrentModel() {
-        const hasImages = attachedFiles.some(f => f.type.startsWith('image/'));
-        return hasImages ? IMAGE_MODEL : TEXT_MODEL;
+        // If images are attached, force vision model
+        if (attachedFiles.some(f => f.type.startsWith('image/'))) return IMAGE_MODEL;
+        return getSelectedModel();
+      }
+
+      function updateModelBadge() {
+        const modelId = getCurrentModel();
+        const info = MILO_MODELS[modelId] || { name: modelId, emoji: '' };
+        modelBadge.textContent = info.emoji + ' ' + info.name;
+        modelSelect.value = getSelectedModel(); // show user's chosen model in settings
+        statusEl.textContent = `Model: ${info.name}`;
       }
 
       function updateModelNote() {
-        const model = getCurrentModel();
         if (attachedFiles.some(f => f.type.startsWith('image/'))) {
-          modelNote.textContent = `Using ${model} for vision`;
+          modelNote.textContent = '👁️ Switched to Milo Vision for image';
         } else {
           modelNote.textContent = '';
         }
-        statusEl.textContent = `Model: ${model === TEXT_MODEL ? '120B free' : 'Gemini vision'}`;
       }
 
       function loadChats() {
@@ -381,7 +421,6 @@
         contextMenu.style.display = 'none';
       });
 
-      // Attachments
       function renderAttachmentChips() {
         attachmentChips.innerHTML = '';
         attachedFiles.forEach((file, index) => {
@@ -404,12 +443,14 @@
           removeBtn.addEventListener('click', () => {
             attachedFiles.splice(index, 1);
             renderAttachmentChips();
+            updateModelBadge();
             updateModelNote();
           });
           chip.appendChild(removeBtn);
           attachmentChips.appendChild(chip);
         });
         updateModelNote();
+        updateModelBadge();
       }
 
       fileInput.addEventListener('change', async () => {
@@ -443,7 +484,6 @@
         });
       }
 
-      // KaTeX
       function renderMathInElement(el) {
         let html = el.innerHTML;
         html = html.replace(/\\\[([\s\S]*?)\\\]/g, (_, formula) => {
@@ -476,8 +516,7 @@
         const copyBtn = document.createElement('button');
         copyBtn.textContent = 'Copy';
         copyBtn.addEventListener('click', () => {
-          const content = body.textContent;
-          navigator.clipboard.writeText(content);
+          navigator.clipboard.writeText(body.textContent);
           copyBtn.textContent = 'Copied!';
           setTimeout(() => copyBtn.textContent = 'Copy', 1200);
         });
@@ -513,35 +552,29 @@
 
       function messagesContainImages(messages) {
         for (const msg of messages) {
-          const content = msg.content;
-          if (Array.isArray(content) && content.some(part => part.type === 'image_url')) return true;
+          if (Array.isArray(msg.content) && msg.content.some(p => p.type === 'image_url')) return true;
         }
         return false;
       }
 
-      // Streaming helper (now calls our own server)
       async function streamResponse(apiParams, assistantBody) {
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...apiParams, stream: true })
         });
-
         if (!response.ok) {
           const data = await response.json();
-          throw new Error(data.error || 'OpenRouter error');
+          throw new Error(data.error || 'Model error');
         }
-
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let fullContent = '';
-
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-
           const chunk = decoder.decode(value);
-          const lines = chunk.split('\n').filter(line => line.startsWith('data: '));
+          const lines = chunk.split('\n').filter(l => l.startsWith('data: '));
           for (const line of lines) {
             const json = line.slice(6);
             if (json === '[DONE]') continue;
@@ -572,8 +605,7 @@
           } else if (userText) {
             parts.push({ type: 'text', text: userText });
           }
-          const images = attachments.filter(f => f.type.startsWith('image/'));
-          images.forEach(img => {
+          attachments.filter(f => f.type.startsWith('image/')).forEach(img => {
             parts.push({ type: 'image_url', image_url: { url: img.dataUrl } });
           });
           userContent = parts.length === 1 && parts[0].type === 'text' ? parts[0].text : parts;
@@ -591,7 +623,6 @@
         saveChats();
         renderApp();
 
-        // Create empty assistant message for streaming
         const { msg: assistantMsg, body: assistantBody } = createMessageElement('assistant');
         assistantBody.textContent = 'Thinking...';
         messagesEl.appendChild(assistantMsg);
@@ -603,8 +634,7 @@
 
         try {
           const historyMessages = chat.messages.slice(-16).map(m => ({
-            role: m.role,
-            content: m.originalContent || m.content
+            role: m.role, content: m.originalContent || m.content
           }));
           const messagesPayload = [
             { role: 'system', content: buildSystemPrompt() },
@@ -612,26 +642,17 @@
           ];
 
           let model = getCurrentModel();
-          if (messagesContainImages(messagesPayload)) {
-            model = IMAGE_MODEL;
-          }
+          if (messagesContainImages(messagesPayload)) model = IMAGE_MODEL;
 
           const fullContent = await streamResponse({
-            model,
-            messages: messagesPayload,
-            temperature: 0.7,
-            max_tokens: 1400
+            model, messages: messagesPayload, temperature: 0.7, max_tokens: 1400
           }, assistantBody);
 
           chat.messages.push({ role: 'assistant', content: fullContent });
           chat.updatedAt = Date.now();
           saveChats();
         } catch (err) {
-          if (err.name === 'AbortError') {
-            assistantBody.textContent = 'Stopped.';
-          } else {
-            assistantBody.textContent = `Error: ${err.message}`;
-          }
+          assistantBody.textContent = err.name === 'AbortError' ? 'Stopped.' : `Error: ${err.message}`;
         } finally {
           activeRequest = null;
           sendBtn.disabled = false;
@@ -660,8 +681,10 @@
         chatTitle.textContent = chat.title;
         renderChatList();
         renderMessages();
+        updateModelBadge();
       }
 
+      // Event bindings
       composerForm.addEventListener('submit', e => {
         e.preventDefault();
         const text = promptEl.value.trim();
@@ -685,7 +708,14 @@
         toggleSidebar(!isVisible);
       });
       closeSidebarBtn.addEventListener('click', () => toggleSidebar(false));
-      settingsBtn.addEventListener('click', () => settingsDialog.showModal());
+      settingsBtn.addEventListener('click', () => {
+        modelSelect.value = getSelectedModel();
+        settingsDialog.showModal();
+      });
+      modelSelect.addEventListener('change', () => {
+        localStorage.setItem(STORAGE.model, modelSelect.value);
+        updateModelBadge();
+      });
       regenerateBtn.addEventListener('click', regenerate);
       exportChatBtn.addEventListener('click', () => {
         const chat = activeChat();
@@ -698,7 +728,7 @@
       });
 
       backupBtn.addEventListener('click', () => {
-        const payload = { chats, activeChatId, memory: memoryNotesEl.value, sysPrompt: systemPromptEl.value };
+        const payload = { chats, activeChatId, memory: memoryNotesEl.value, sysPrompt: systemPromptEl.value, model: getSelectedModel() };
         const blob = new Blob([JSON.stringify(payload,null,2)], { type: 'application/json' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
@@ -713,6 +743,7 @@
           if (data.chats) { chats = data.chats; activeChatId = data.activeChatId; }
           if (data.memory) { memoryNotesEl.value = data.memory; localStorage.setItem(STORAGE.memory, data.memory); }
           if (data.sysPrompt) { systemPromptEl.value = data.sysPrompt; localStorage.setItem(STORAGE.sysPrompt, data.sysPrompt); }
+          if (data.model) { localStorage.setItem(STORAGE.model, data.model); }
           saveChats(); renderApp();
           alert('Backup restored.');
         } catch { alert('Invalid backup.'); }
@@ -732,7 +763,8 @@
       loadChats();
       renderApp();
       toggleSidebar(localStorage.getItem(STORAGE.sidebar) !== '0');
-      updateModelNote();
+      modelSelect.value = getSelectedModel();
+      updateModelBadge();
     })();
   </script>
 </body>

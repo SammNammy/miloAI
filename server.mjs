@@ -43,7 +43,9 @@ async function handleChat(req, res) {
     return;
   }
 
-  // Attempt the OpenRouter API call – but DO NOT send response headers yet
+  const model = payload.model || "deepseek/deepseek-v4-flash:free";
+  console.log(`🤖 Using model: ${model}`);
+
   let response;
   try {
     response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -55,7 +57,7 @@ async function handleChat(req, res) {
         "X-Title": "Milo"
       },
       body: JSON.stringify({
-        model: payload.model || "openai/gpt-oss-120b:free",
+        model,
         messages: payload.messages || [],
         temperature: payload.temperature ?? 0.7,
         max_tokens: payload.max_tokens ?? 1400,
@@ -68,15 +70,12 @@ async function handleChat(req, res) {
     return;
   }
 
-  // Handle streaming response
   if (payload.stream) {
-    // Stream the response – once headers are sent, we must NOT use sendJson
     res.writeHead(response.status, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       "Connection": "keep-alive"
     });
-
     const reader = response.body.getReader();
     try {
       while (true) {
@@ -87,13 +86,11 @@ async function handleChat(req, res) {
       res.end();
     } catch (err) {
       console.error("❌ Streaming error:", err.message);
-      // Response already started – just end it, the client will see an incomplete stream
       res.end();
     }
     return;
   }
 
-  // Handle normal (non‑streaming) response
   try {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error?.message || "OpenRouter error");
@@ -130,7 +127,6 @@ async function serveStatic(req, res) {
 
 const server = http.createServer(async (req, res) => {
   console.log(`${req.method} ${req.url}`);
-
   if (req.method === "POST" && req.url === "/api/chat") {
     await handleChat(req, res);
     return;
